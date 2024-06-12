@@ -3,56 +3,81 @@ import axios from 'axios'
 import PersonList from './components/PersonList';
 import AddName from './components/AddName'; 
 import FilterInput from './components/FilterInput';
+import PersonService from './services/persons'
 
 const App = () => {
   const [persons, setPersons] = useState([])
+
   useEffect (() => {
-    console.log('effect')
-
-    axios
-    .get('http://localhost:3001/persons')
-    .then(response => {
-      console.log('promise fullfiled')
-      setPersons(response.data) 
-    })
+    PersonService
+      .getAll()
+      .then(response => {
+        setPersons(response)
+      })    
   }, [])
-  console.log ('render', persons.length, 'persons')
-
-
-  // const [persons, setPersons] = useState([
-  //   { name: 'Arto Hellas', number: '040-123456', id: 1 },
-  //   { name: 'Ada Lovelace', number: '39-44-5323523', id: 2 },
-  //   { name: 'Dan Abramov', number: '12-43-234345', id: 3 },
-  //   { name: 'Mary Poppendieck', number: '39-23-6423122', id: 4 }
-  // ]);
 
   const [newName, setNewName] = useState('');
   const [newNumber, setNewNumber] = useState('');
   const [newSearch, setNewSearch] = useState('');
-  const nameInputRef = useRef(null);
 
   const isDuplicate = () => {    
     return persons.some(person => 
       person.name === newName && person.number === newNumber);
   };
 
-  const addName = (event) => {
-    event.preventDefault();
-
-    if (isDuplicate()) {
-      alert(`${newName} is already added to the phonebook`);
-    } else {
-      const nameObject = {
-        name: newName,
-        number: newNumber,
-        id: persons.length + 1
-      }; 
-      setPersons(persons.concat(nameObject));
+  const isDuplicateName = () => {
+    if (persons.find(person => person.name === newNumber)) {
+      window.confirm(`${newName} is already added to the phonebook
+        , replace the old number with a new one?`)
     }
-    setNewName(''); 
-    setNewNumber(''); 
-    nameInputRef.current.focus();  
-  };
+  }
+
+  const addName = (event) => {
+    event.preventDefault()
+
+    const existingPerson = persons.find(person => person.name === newName);
+    const isExistingNumber = persons.some(person => person.number === newNumber);
+
+    if (existingPerson && isExistingNumber){
+      alert(`${newName} is already added to the phonebook`);
+      return;
+    }
+
+    const nameObject = {
+        name: newName,
+        number: newNumber
+    }
+
+    if (existingPerson && !isExistingNumber) {
+      if (window.confirm(`${newName} is already added to the phonebook, replace the old number with a new one?`))
+        {
+       PersonService
+        .replace(existingPerson.id, nameObject)
+        .then(response => {
+          setPersons(persons.map(person => person.id !== existingPerson.id ? person : response));
+          setNewName('');
+          setNewNumber('');
+        })
+        .catch(error => {
+          Alert('Error updating person', error)
+        })
+        }
+      
+    } else {
+      PersonService
+        .create(nameObject)
+        .then(response => {
+          setPersons(persons.concat(response));
+          setNewName('');
+          setNewNumber('');
+        })
+        .catch(error => {
+          Alert.error('Error adding person', error);
+        })
+    }
+
+   
+  }
 
   const handleOnChange = (event) => {
     const { name, value } = event.target;
@@ -67,6 +92,18 @@ const App = () => {
     }
   };
 
+  const handleDelete = (id) => {
+    const selectedPerson = persons.find( person => person.id === id)
+    if (confirm(`Delete ${selectedPerson.name}`)){
+      PersonService
+      .deleteItem(id)
+      .then( () => {
+        setPersons(persons.filter(( persons => persons.id !== id)))
+      })
+    }
+   
+  }
+
   return (
     <div>
       <h2>Phonebook</h2>
@@ -74,9 +111,10 @@ const App = () => {
       <h3>Add New</h3>
       <AddName handleOnChange={handleOnChange} addName={addName} newName={newName} newNumber={newNumber} />
       <h3>Numbers</h3>
-      <PersonList persons={persons} newSearch={newSearch} />  
+      <PersonList persons={persons} newSearch={newSearch} handleDelete={handleDelete} />  
     </div>
   );
 };
+
 
 export default App;
